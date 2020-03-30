@@ -15,10 +15,10 @@ class State:
         :param name: name of the state
         :type name: String (str)
         :param contagiousity: parameter positively correlated to the probability of 
-            infecting other agents in the same cell if one agent is carrying this state
+            infecting other agents in the same environment if one agent is carrying this state
         :type contagiousity: float between 0 and 1
         :param sensitivity: parameter positively correlated to the probability of getting infected by 
-            another agent if one agent carrying this state is in the same cell than another agent carrying 
+            another agent if one agent carrying this state is in the same environment than another agent carrying 
             a state having contagiousity > 0
         :type sensitivity: float between 0 and 1
         :param severity: measure the severity of the state
@@ -50,9 +50,9 @@ class State:
 
 
 class Agent:
-    def __init__(self, id, p_move, transitions, states, durations, current_state, home_cell_id):
-        """ An agent can move from cell to cell and get infected by another 
-        agent being simoultaneously in the same cell.
+    def __init__(self, id, p_move, transitions, states, durations, current_state, home_env_id):
+        """ An agent can move from environment to environment and get infected by another 
+        agent being simoultaneously in the same environment.
         
         :param id: id of the agent
         :type id: Integer (int)
@@ -66,8 +66,8 @@ class Agent:
         :type durations: iterable of length #states containing strictly positive integers
         :param current_state: state of the agent at its initialization
         :type current_state: <State>
-        :param home_cell_id: if of the home cell of the agent
-        :type home_cell_id: int
+        :param home_env_id: if of the home environment of the agent
+        :type home_env_id: int
         """
         self.id = id
         self.p_move = p_move
@@ -75,8 +75,8 @@ class Agent:
         self.states = states
         self.durations = durations
         self.current_state = current_state
-        self.home_cell_id = home_cell_id
-        self.current_cell_id = home_cell_id
+        self.home_env_id = home_env_id
+        self.current_env_id = home_env_id
         # Define dicts for `states`
         self.name2state = {state.get_name(): state for state in states}
         self.name2index = {state.get_name(): i for i, state in enumerate(states)}
@@ -97,16 +97,16 @@ class Agent:
         return self.p_move
 
 
-    def get_home_cell_id(self):
-        return self.home_cell_id
+    def get_home_env_id(self):
+        return self.home_env_id
 
 
-    def get_current_cell_id(self):
-        return self.current_cell_id
+    def get_current_env_id(self):
+        return self.current_env_id
 
 
-    def set_current_cell_id(self, cell_id):
-        self.current_cell_id = cell_id
+    def set_current_env_id(self, env_id):
+        self.current_env_id = env_id
 
 
     def get_state(self):
@@ -151,22 +151,22 @@ class Agent:
 
 
 
-class Cell:
+class Environment:
     def __init__(self, id, position, attractivity, unsafety, agents):
-        """A cell is figuratively a place where several agents can be together and possibly get 
-        infected from an infected agent in the cell.
-        A cell has also a geographic `position` (Euclidean coordinates) and an `attractivity` influencing the 
-        probability of the agents in other cells to move in this cell.
+        """An environment is figuratively a place where several agents can be together and possibly get 
+        infected from an infected agent in the environment.
+        An environment has also a geographic `position` (Euclidean coordinates) and an `attractivity` influencing the 
+        probability of the agents in other environments to move in this environment.
         
-        :param id: id of the cell
+        :param id: id of the environment
         :type id: Integer (int)
-        :param position: position of the cell
+        :param position: position of the environment
         :type position: iterable of length 2 containing non-imaginary numerical values
-        :param attractivity: attractivity of the cell
+        :param attractivity: attractivity of the environment
         :type attractivity: positive numerical value
-        :param unsafety: unsafety of the cell (positively correlated to the probability than contagions happen in the cell)
+        :param unsafety: unsafety of the environment (positively correlated to the probability than contagions happen in the environment)
         :type unsafety: numerical value between 0 and 1
-        :param agents: agents initially belonging to the cell. This cell will be their home cell
+        :param agents: agents initially belonging to the environment. This environment will be their home environment
         :type agents: list of <Agent>
         """
         self.id = id
@@ -194,80 +194,80 @@ class Cell:
         return [agent.get_id() for agent in self.agents]
 
     def update_agent_states(self):
-        """ update the state of the agent in the cell by activing contagion. The probability for an agent to get infected is:
-        (greatest contagiousity among agents in cell) * (sensitivity of agent)
+        """ update the state of the agent in the environment by activing contagion. The probability for an agent to get infected is:
+        (greatest contagiousity among agents in environment) * (sensitivity of agent)
         """
         greatest_contagiousity = max([agent.get_state().get_contagiousity() for agent in self.agents])
         if greatest_contagiousity == 0: 
-            return  # no update if no agent in the cell is contagious
-        for agent in self.agents:  # unnecessary to parallelize, there shouldn't be too many agents in a single cell
+            return  # no update if no agent in the environment is contagious
+        for agent in self.agents:  # unnecessary to parallelize, there shouldn't be too many agents in a single environment
             proba_infection = greatest_contagiousity * agent.get_state().get_sensitivity() * self.unsafety
             draw = uniform()
             if draw < proba_infection:
                 agent.get_infected()
 
     def add_agent(self, agent, update=True):
-        """ add `agent` to the cell. `update`: if to proceed to contagion within the cell or not. """
+        """ add `agent` to the environment. `update`: if to proceed to contagion within the environment or not. """
         self.agents.append(agent)
         if update:
             self.update_agent_states()
 
     def remove_agent(self, agent_id):
         """ Remove agent which id (caution!) is `agent_id`. No update possible here since 
-        removing an agent from a cell doesn't change the state of the remaining agents """
+        removing an agent from an environment doesn't change the state of the remaining agents """
         self.agents = [agent for agent in self.agents if agent.get_id() != agent_id]
 
         
 class Map:
-    def __init__(self, cells, agents):
-        """ A map contains a list of `cells`, `agents` and an implementation of the 
-        way agents can move from a cell to another.
-        It also contains methods to get the current repartition of agents among the cells.
+    def __init__(self, environments, agents):
+        """ A map contains a list of `environments`, `agents` and an implementation of the 
+        way agents can move from an environment to another.
+        It also contains methods to get the current repartition of agents among the environments.
         
-        :param cells: cells contained in the map
-        :type cells: list of <Cell>
+        :param environments: environments contained in the map
+        :type environments: list of <Environment>
         :param agents: agents contained in the map
         :type agents: list of <Agent>
         """
-        self.cells = cells
+        self.environments = environments
         self.agents = agents
-        self.n_cells = len(cells)
+        self.n_envs = len(environments)
         self.n_agents = len(agents)
-        # Define dicts to access own cells and agents
-        self.id2cell = {cell.get_id(): cell for cell in cells}
+        # Define dicts to access own environments and agents
+        self.id2env = {environment.get_id(): environment for environment in environments}
         self.id2agents = {agent.get_id(): agent for agent in agents}
         
-        self.pos_agents_arr = array([self.id2cell.get(ind.get_home_cell_id()).get_position() for ind in agents])
-        self.pos_cells_arr = array([cell.get_position() for cell in cells])
-        self.attractivity_arr = array([cell.get_attractivity() for cell in cells])
+        self.pos_agents_arr = array([self.id2env.get(ind.get_home_env_id()).get_position() for ind in agents])
+        self.pos_envs_arr = array([environment.get_position() for environment in environments])
+        self.attractivity_arr = array([environment.get_attractivity() for environment in environments])
 
-        self.move_proba_matrix = get_move_proba_matrix(self.pos_cells_arr, self.pos_agents_arr, self.attractivity_arr)
+        self.move_proba_matrix = get_move_proba_matrix(self.pos_envs_arr, self.pos_agents_arr, self.attractivity_arr)
 
 
-    def move_agent_cell(self, agent, cell, update=True):
-        """ Move `agent` to `cell`. 
-        `update`: if to update its new cell state after the move """
-        current_cell = self.id2cell.get(agent.get_current_cell_id())
-        current_cell.remove_agent(agent.get_id())
-        cell.add_agent(agent, update=update)
-        agent.set_current_cell_id(cell.get_id())
+    def move_agent_env(self, agent, environment, update=True):
+        """ Move `agent` to `environment`. 
+        `update`: if to update its new environment state after the move """
+        current_env = self.id2env.get(agent.get_current_env_id())
+        current_env.remove_agent(agent.get_id())
+        environment.add_agent(agent, update=update)
+        agent.set_current_env_id(environment.get_id())
 
 
     def move_single_agent(self, i):
         current_agent = self.agents[i]
-        probas_new_cell = self.move_proba_matrix[:,i].flatten()
-        ind_new_cell = int(choice(self.n_cells, 1, p=probas_new_cell))
-        new_cell = self.cells[ind_new_cell]
-        self.move_agent_cell(current_agent, new_cell)
+        probas_new_env = self.move_proba_matrix[:,i].flatten()
+        ind_new_env = int(choice(self.n_envs, 1, p=probas_new_env))
+        new_env = self.environments[ind_new_env]
+        self.move_agent_env(current_agent, new_env)
 
 
     def move_home(self, agent, update=False):
-        """ Move `agent` to its home cell. 
-        `update`: if to update its home cell state after the move """
-        if agent.get_current_cell_id() == agent.get_home_cell_id():
+        """ Move `agent` to its home environment. 
+        `update`: if to update its home environment state after the move """
+        if agent.get_current_env_id() == agent.get_home_env_id():
             return
-        cell = self.id2cell.get(agent.get_home_cell_id())
-        self.move_agent_cell(agent, cell, update)
+        environment = self.id2env.get(agent.get_home_env_id())
+        self.move_agent_env(agent, environment, update)
 
 
     def move_home_ind(self, i):
@@ -281,7 +281,7 @@ class Map:
 
     def make_move(self):
         """ Select agents to move according to their probability to move and then 
-        move these to a cell according to `move_proba_matrix`. If an agent is not selected for a move, 
+        move these to an environment according to `move_proba_matrix`. If an agent is not selected for a move, 
         it's considered to return (or stay) home during this move """
         # Select agents who make a move
         draw = uniform()
@@ -304,7 +304,7 @@ class Map:
 
 
     def all_home(self):
-        """ Move all agents to their home cell """
+        """ Move all agents to their home environment """
         pool = Pool(cpu_count())
         for i in range(self.n_agents):
             pool.apply_async(Map.move_home_ind, args=(self, i))
@@ -312,6 +312,6 @@ class Map:
 
 
     def get_repartition(self):
-        """ returns repartition of agents by cell as dict: cell_id => [agent_id in cell] """
-        return {cell.get_id(): cell.get_agents_id() for cell in self.cells}
+        """ returns repartition of agents by environment as dict: env_id => [agent_id in environment] """
+        return {environment.get_id(): environment.get_agents_id() for environment in self.environments}
             
